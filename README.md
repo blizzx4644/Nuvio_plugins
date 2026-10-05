@@ -1,24 +1,21 @@
-# NAKIOS pour Nuvio (plugin / local scraper)
+# Plugins Nuvio — NAKIOS + PURSTREAM
 
-> **v1.1.0 — version optimisée vitesse** : cache de résultats, bascule de domaine en
-> parallèle, déduplication, préchargement de l'épisode suivant et préchauffage au
-> démarrage. Mesures avant/après dans la section [Vitesse](#vitesse).
+Dépôt de **local scrapers** pour Nuvio : deux sources de streams indépendantes, activables
+séparément, avec la même architecture de vitesse (cache, bascule de domaine en parallèle,
+cooldown des hôtes morts, préchauffage).
 
-Scraper Nuvio qui ajoute **NAKIOS (NK)** — films et séries en VF/VOSTFR — comme source de
-streams, à partir de l'API publique de Nakios :
-
-| Type  | Endpoint                                          |
-|-------|---------------------------------------------------|
-| Film  | `{api}/api/sources/movie/{tmdbId}`                |
-| Série | `{api}/api/sources/tv/{tmdbId}/{saison}/{episode}`|
-
-Exemples réels : `movie/969681`, `tv/45790/1/15`.
+| Scraper | Contenu | Format | Particularité |
+|---|---|---|---|
+| **NAKIOS (NK)** | films, séries, VF/VOSTFR | MP4 | API qui prend directement l'ID TMDB |
+| **PURSTREAM** | films, séries, MULTI/VOSTFR | HLS (m3u8) | l'API ne prend **pas** l'ID TMDB : résolution par titre + vérification |
 
 ```
 manifest.json            # registre du dépôt (à coller dans Nuvio)
-providers/nakios.js      # le scraper (getStreams + onSettings)
-test/test-nakios.js      # tests hors ligne + live
-test/bench-nakios.js     # mesure du temps de recherche d'un stream
+providers/nakios.js      # scraper NAKIOS  (v1.1.0)
+providers/purstream.js   # scraper PURSTREAM (v1.0.0)
+test/test-nakios.js      # 22 tests
+test/test-purstream.js   # 20 tests
+test/bench.js            # mesure du temps de recherche (tous les providers)
 ```
 
 ## Installation dans Nuvio
@@ -31,120 +28,171 @@ test/bench-nakios.js     # mesure du temps de recherche d'un stream
    https://raw.githubusercontent.com/<TON_PSEUDO>/<TON_REPO>/main/manifest.json
    ```
 
-4. Actualise la liste, active **NAKIOS**, puis lance un film ou un épisode.
+4. Actualise la liste, active **NAKIOS** et/ou **PURSTREAM**, puis lance un film ou un épisode.
 
-Pour tester en local : `Réglages → Developer → Plugin Tester`, et pointe l'URL du manifeste
-vers ton serveur local (`http://<ip-locale>:3000/manifest.json`) ou colle directement
-l'URL d'un provider.
+Pour tester en local : `Réglages → Developer → Plugin Tester`, en pointant l'URL du manifeste
+vers ton serveur local (`http://<ip-locale>:3000/manifest.json`).
 
-## Réglages du scraper
+---
 
-Réglages Nuvio → NAKIOS :
+## NAKIOS (NK)
+
+| Type | Endpoint |
+|---|---|
+| Film | `{api}/api/sources/movie/{tmdbId}` |
+| Série | `{api}/api/sources/tv/{tmdbId}/{saison}/{épisode}` |
+
+- **Les en-têtes du site sont obligatoires** : l'API renvoie **404** sans
+  `Referer: https://nakios.rent/` et `Origin: https://nakios.rent` (vérifié). Ils sont donc
+  envoyés à l'API **et** attachés à chaque stream (`stream.headers`) pour la lecture.
+- Les MP4 passent par une chaîne de redirections (`cdn79…` → proxy → URL signée `?ff=…`) que le
+  lecteur suit tout seul ; le proxy ne renvoie pas de `Content-Type`, les URLs se terminent
+  par `.mp4` (octets vérifiés : signature `ftypisom`).
 
 | Réglage | Rôle |
 |---|---|
-| **Domaine actuel** | Domaine utilisé (`nakios.rent` par défaut). Format accepté : `nakios.to`, `https://nakios.to/`, `api.nakios.to`. |
-| **Chercher automatiquement un domaine qui répond** | Si le domaine principal ne répond pas, les autres sont interrogés **en parallèle** (`api.nakios.rent` puis `nakios.to`, `.com`, `.net`…), le plus rapide gagne. |
-| **Préchauffer la connexion au démarrage** | Une petite requête en arrière-plan ouvre la connexion et découvre le bon domaine avant ta première lecture. |
-| **Précharger l'épisode suivant** | Après un épisode, la fiche du suivant est récupérée en arrière-plan : « épisode suivant » est instantané. |
-| **Langue préférée** | Toutes / VF / VOSTFR (filtre sur le champ `lang` de l'API). |
-| **Afficher la langue dans le titre** | Affiche `NAKIOS (NK) • VF • HD • Premium` au lieu de `NAKIOS (NK) • HD • Premium`. |
+| **Domaine actuel** | `nakios.rent` par défaut. Formats acceptés : `nakios.to`, `https://nakios.to/`, `api.nakios.to`. |
+| **Chercher automatiquement un domaine qui répond** | Interroge les autres hôtes en parallèle (le plus rapide gagne). |
+| **Préchauffer la connexion au démarrage** | Ouvre la connexion et découvre le bon domaine avant la première lecture. |
+| **Précharger l'épisode suivant** | Récupère la fiche de l'épisode suivant en arrière-plan (5 s après le lancement). |
+| **Langue préférée** | Toutes / VF / VOSTFR. |
+| **Afficher la langue dans le titre** | `NAKIOS (NK) • VF • HD • Premium`. |
 
-## Le domaine change souvent
+---
 
-C'est prévu à trois niveaux :
+## PURSTREAM
 
-1. **Cache de session** — dès qu'un hôte API a répondu, c'est lui qui est réutilisé pour
-   les appels suivants (aucune requête perdue).
-2. **Chaîne de secours** — si l'hôte échoue (erreur réseau, HTTP 4xx/5xx), le scraper teste
-   dans l'ordre : le domaine configuré → `api.nakios.rent` → les TLD voisins de `nakios.*`
-   (6 hôtes maximum, 9 s de timeout chacun, un seul appel en cas de succès).
-3. **Réglage manuel** — si Nakios part sur un domaine inattendu (`nakios-nouveau.com`),
-   mets simplement le nouveau domaine dans **Domaine actuel**, sans attendre une mise à jour.
+| Type | Endpoint |
+|---|---|
+| Recherche | `{api}/api/v1/search-bar/search/{titre}` |
+| Fiche | `{api}/api/v1/media/{idInterne}/sheet` |
 
-Le `Referer`/`Origin` envoyés sont toujours recalculés depuis le domaine qui répond
-(`api.nakios.to` → `Referer: https://nakios.to/`).
+### Pourquoi il faut une résolution d'identifiant
+
+Nuvio fournit un **ID TMDB**, mais l'API Purstream ne connaît que son **id interne**
+(`tmdb 45790 → id 3515`, `tmdb 969681 → id 16989`). Les résultats de recherche ne contiennent
+pas le `tmdbId`, seule la fiche l'expose. Le scraper enchaîne donc :
+
+1. **TMDb** (`/movie|tv/{tmdbId}?language=fr-FR`) pour obtenir le titre et l'année ;
+2. **recherche Purstream** sur ce titre, candidats filtrés par type (film/série) et triés par
+   ressemblance de titre + proximité d'année ;
+3. **fiche du meilleur candidat** puis **vérification de `tmdbId`** : si la fiche ne correspond
+   pas, les autres candidats sont vérifiés en parallèle et la première correspondance exacte gagne.
+   Un candidat au bon titre mais au mauvais `tmdbId` est donc écarté (testé) ;
+4. si le titre français ne donne rien, deuxième essai automatique en anglais.
+
+Validé sur 10 titres réels (Fight Club, Inception, Matrix, Forrest Gump, Breaking Bad,
+L'Attaque des Titans, Arcane, House of the Dragon, The Mandalorian, Game of Thrones) : **10/10
+résolus**, entre 250 et 450 ms chacun (le premier de chaque titre).
+
+### Une fiche = toute la série
+
+La fiche d'une série contient **tous les épisodes de toutes les saisons** (JoJo : 187 URLs,
+Breaking Bad : 62, Game of Thrones : 73). Le scraper la met en cache 30 min et filtre
+saison/épisode par expression régulière sur l'URL (`/S1/E15/…`). Conséquence : le premier
+épisode paie la résolution (~150-450 ms), **tous les suivants sont instantanés** (0-1 ms).
+
+Les épisodes absents du catalogue (JoJo en propose 187 sur 202) renvoient simplement une liste
+vide — aucune erreur.
+
+### En-têtes
+
+Les en-têtes du site (`Referer: https://purstream.tech/`, `Origin: https://purstream.tech`)
+sont envoyés à l'API et attachés à chaque stream. Mesures au curl sur les playlists HLS :
+
+| Requête | Réponse |
+|---|---|
+| User-Agent navigateur + Referer + Origin | **200** |
+| User-Agent navigateur seul | 200 |
+| `Referer` + `Origin` mais User-Agent `curl` | **403** |
+| Mauvais `Referer`/`Origin` + User-Agent navigateur | 200 |
+
+Autrement dit : **c'est le User-Agent qui est filtré par le CDN, pas le Referer** (contrairement
+à l'API Nakios où le Referer est obligatoire). Le scraper envoie donc un User-Agent navigateur
+dans `stream.headers`, en plus du Referer/Origin demandés.
+
+| Réglage | Rôle |
+|---|---|
+| **Domaine actuel** | `purstream.tech` par défaut. |
+| **Chercher automatiquement un domaine qui répond** | Idem Nakios, sur `api.purstream.tech` et les TLD voisins. |
+| **Préchauffer la connexion au démarrage** | Ouvre la connexion Purstream **et** TMDb (utilisée à chaque nouvelle résolution). |
+| **Version préférée** | Toutes / MULTI-VF / VOSTFR. |
+| **Afficher la version dans le titre** | `S1E15 • PURSTREAM • MULTI • 1080p`. |
+
+---
 
 ## Vitesse
 
-Mesuré sur l'API réelle avec `npm run bench` (Node 26, même machine, réseau identique) :
+Mécanismes communs aux deux scrapers :
 
-| Scénario | Avant (v1.0.0) | Après (v1.1.0) |
-|---|---|---|
-| 8 films différents (aucun cache possible) | p50 **246 ms**, total 2077 ms | p50 **250 ms**, total 2128 ms |
-| Même titre demandé 2 fois | 239 ms puis **245 ms** | 246 ms puis **1 ms** |
-| Épisode S1E15 puis S1E16 | 240 ms puis **269 ms** | 246 ms puis **0 ms** (préchargé) |
-| Domaine principal qui pend | **9289 ms** | **568 ms** |
-| 1er appel après préchauffage | — (pas de warm-up) | **gain non mesurable** sur ce réseau (240 ms vs 243 ms : dans le bruit) |
-
-À lire honnêtement : **le tout premier appel d'un titre ne peut pas descendre sous ~240 ms**, c'est
-le temps de réponse du serveur Nakios (TTFB ~230 ms mesuré au curl : DNS 1,4 ms, TLS 25 ms, le reste
-côté serveur). Une fois ce plancher atteint, les gains viennent de tout ce qu'on évite de refaire :
-
-1. **Cache de résultats (30 min)** — un titre déjà demandé répond en ~1 ms, en réutilisant les URLs
-   brutes de l'API (stables, le jeton `?ff=` n'est ajouté qu'à la redirection de lecture).
-   Un « aucune source » est réessayé au bout de 60 s pour ne pas masquer les nouveautés.
-2. **Déduplication** — si l'application demande deux fois le même épisode en même temps, une seule
-   requête réseau part, les deux appels partagent la réponse.
-3. **Bascule de domaine en parallèle (hedged request)** — l'hôte principal part seul ; s'il n'a rien
+1. **Cache de résultats** — NAKIOS 30 min (et 6 h pour les titres TMDb / ids internes de
+   PURSTREAM) ; un « aucune source » est réessayé au bout de 60 s pour ne pas masquer les nouveautés.
+2. **Déduplication** — deux appels simultanés pour le même titre partagent une seule requête.
+3. **Bascule de domaine en parallèle (hedged)** — l'hôte principal part seul ; s'il n'a pas
    répondu après ~1,6 × la dernière latence mesurée (300–1200 ms), tous les autres hôtes sont
-   interrogés simultanément et le premier qui répond gagne, les autres étant annulés (`AbortController`).
-   Un hôte injoignable ne coûte donc plus 9 s mais ~0,5 s. Si la requête principale échoue
-   immédiatement, la rafale part sans attendre.
-4. **Cooldown des hôtes morts (90 s)** — un hôte qui vient d'échouer est ignoré pendant 90 s : les
-   appels suivants ne perdent plus de temps à retenter un domaine HS.
-5. **Préchargement de l'épisode suivant** — 5 s après le lancement d'un épisode, la fiche du suivant
-   est récupérée en arrière-plan (réglage désactivable) : passer à l'épisode suivant ne coûte rien.
-6. **Préchauffage au démarrage** — 1,2 s après le chargement du scraper (et à l'ouverture des
-   réglages), une petite requête ouvre la connexion et découvre le domaine qui répond. Le gain en
-   millisecondes est négligeable sur un réseau rapide (DNS 1,4 ms, TLS 25 ms ici, et le pool de
-   connexions est de toute façon réutilisé) : l'intérêt réel est d'**absorber une rotation de domaine
-   en arrière-plan**, pendant que l'utilisateur navigue, au lieu de la payer au moment du clic.
+   interrogés simultanément, le premier qui répond gagne, les autres sont annulés
+   (`AbortController`). Si l'appel principal échoue tout de suite, la rafale part immédiatement.
+4. **Cooldown des hôtes morts (90 s)** — un hôte qui vient d'échouer n'est pas retenté à chaque appel.
+5. **Temps mort borné** — timeout de 4 s par hôte au lieu de 9 s.
+6. **Préchauffage au démarrage** — 1,2 s après le chargement du scraper, une petite requête ouvre
+   la connexion et découvre le domaine qui répond (le gain en millisecondes est négligeable sur
+   un réseau rapide ; l'intérêt est d'absorber une rotation de domaine en arrière-plan).
 
-Timeout : 4 s par hôte (au lieu de 9 s) — au-delà, la réponse vient de la rafale parallèle de toute façon.
-Le tri final met la langue préférée et les liens directs en tête, les liens `embed` en dernier.
+Mesures sur l'API réelle avec `npm run bench` (Node 26, même machine) :
+
+| Scénario | NAKIOS | PURSTREAM |
+|---|---|---|
+| 8 films différents (aucun cache) | p50 **263 ms**, total 2211 ms | p50 **207 ms**, total 1626 ms |
+| Même titre demandé 2 fois | 237 ms → **0 ms** | 156 ms → **0 ms** |
+| S1E15 puis S1E16 | 237 ms → **0 ms** (prefetch) | 167 ms → **1 ms** (fiche unique) |
+| Domaine principal qui pend | 570 ms *(9 295 ms avant optimisation)* | 523 ms |
+| 1er appel après préchauffage | gain non mesurable (dans le bruit) | gain non mesurable (dans le bruit) |
+
+À lire honnêtement :
+
+- NAKIOS ne peut pas descendre sous ~240 ms : c'est le TTFB de son serveur (mesuré au curl :
+  DNS 1,4 ms, TLS 25 ms, le reste côté serveur).
+- PURSTREAM fait **trois** requêtes à froid (TMDb + recherche + fiche) mais reste plus rapide,
+  parce que ses serveurs répondent en ~50-100 ms. Le vrai coût est payé **une seule fois** par
+  titre (et une seule fois par **série entière** grâce à la fiche unique).
+- Le préchauffage ne montre pas de gain mesurable en millisecondes sur ce réseau ; il sert à
+  absorber une rotation de domaine sans que l'utilisateur l'attende.
 
 ```bash
-npm run bench                                  # la version courante
-node test/bench-nakios.js /tmp/nakios-v1.js    # comparer avec une ancienne version
+npm run bench                          # tous les providers
+node test/bench.js providers/purstream.js
+node test/bench.js /tmp/nakios-v1.js   # comparer avec une ancienne version
 ```
 
 ## Notes techniques
 
-- **Headers obligatoires** : l'API renvoie `404` sans `Referer: https://nakios.rent/` et
-  `Origin: https://nakios.rent`. Ils sont envoyés à l'API **et** attachés à chaque stream
-  (`stream.headers`) pour que le lecteur les renvoie pendant la lecture.
-- **Chaîne CDN** : l'URL MP4 renvoyée par l'API redirige (`cdn…` → proxy → URL signée
-  `?ff=…`). Le scraper laisse le lecteur suivre ces redirections ; les URLs se terminent
-  par `.mp4`.
-- **Pas de `Content-Type` sur le flux final** : le proxy CDN ne le renseigne pas
-  (vérifié : octets MP4 valides avec signature `ftypisom`). Le lecteur s'appuie sur
-  l'extension `.mp4`.
-- **Champs renvoyés** : `name`, `title`, `url`, `quality`, `lang`, `type`, `provider` et
-  `headers`. Les entrées sans `url` sont ignorées, les doublons d'URL dédupliqués.
-- Le provider n'utilise **ni `async`/`await`, ni spread, ni optional chaining** dans son
-  code exécuté (chaînes de promesses uniquement) pour rester compatible avec le moteur
-  JS de l'application.
-- L'état de session (cache, hôte retenu, hôtes en cooldown, `lastLatency`) vit en mémoire :
-  il est perdu au redémarrage de l'application, ce qui est voulu (les URLs sont revalidées
-  à chaque lancement).
+- **Aucun `async`/`await`, spread ou optional chaining** dans le code exécuté des providers
+  (chaînes de promesses uniquement) pour rester compatible avec le moteur JS de l'application.
+- Headers envoyés : `User-Agent` navigateur, `Referer: {site}/`, `Origin: {site}`,
+  `Accept`, `Accept-Language: fr-FR…`, `Connection: keep-alive`.
+- **Le `Referer` suit le domaine qui répond** : si la bascule retient `api.nakios.to`, les
+  streams portent `Referer: https://nakios.to/`.
+- Tri des sources : version préférée d'abord, puis qualité décroissante ; les liens `embed`
+  (NAKIOS) passent en dernier ; doublons d'URL filtrés.
+- L'état de session (caches, hôte retenu, cooldowns, latence mesurée) vit en mémoire : il est
+  perdu au redémarrage de l'application, ce qui est voulu.
 
 ## Tests
 
 ```bash
-npm test          # ou : node test/test-nakios.js
+npm test     # les deux suites, ~50 s (appels réels inclus)
 ```
 
-- **Hors ligne** (fetch mocké) : construction des URLs film/série, présence des headers
-  `Referer`/`Origin`, mapping des sources, tri, filtre de langue, fallback quand le domaine est
-  mort, `onSettings()`, cache, déduplication, hôte qui pend (bascule parallèle + annulation),
-  cooldown, prefetch, préchauffage.
-- **Live** : appels réels sur `api.nakios.rent` pour `movie/969681` et `tv/45790/1/15`,
-  bascule réelle depuis un domaine invalide (< 2,5 s), cache, prefetch, et téléchargement des
-  premiers octets du MP4 pour vérifier qu'il est bien lisible avec les headers fournis.
+- **NAKIOS** (22 tests) : URLs film/série, en-têtes, mapping, tri, doublons, filtre de langue,
+  bascule et cooldown, cache, dédup, hôte qui pend (annulation vérifiée), prefetch, préchauffage,
+  plus les tests live (octets MP4 réels, rotation de domaine < 2,5 s).
+- **PURSTREAM** (20 tests) : chaîne TMDb → recherche → fiche, **rejet d'un candidat au mauvais
+  `tmdbId`**, filtre saison/épisode, épisode absent, fiche unique réutilisée pour toute la série,
+  cache, dédup, bascule et cooldown, hôte qui pend, TMDb injoignable, plus les tests live
+  (playlist HLS lue avec les headers, 403 avec User-Agent curl, rotation de domaine).
 
 ## Avertissement
 
-Ce dépôt n'héberge aucun contenu. Le scraper se contente d'interroger une API tierce et
-d'exposer les liens qu'elle renvoie ; l'utilisateur reste responsable du respect des lois
-et des conditions d'utilisation applicables dans son pays.
+Ce dépôt n'héberge aucun contenu. Les scrapers interrogent des API tierces et exposent les liens
+qu'elles renvoient ; l'utilisateur reste responsable du respect des lois et des conditions
+d'utilisation applicables dans son pays.

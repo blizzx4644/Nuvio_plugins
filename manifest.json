@@ -1,5 +1,5 @@
 {
-  "name": "Nakios Repo",
+  "name": "Nuvio Repo — NAKIOS + PURSTREAM",
   "version": "1.1.0",
   "scrapers": [
     {
@@ -8,13 +8,41 @@
       "description": "NAKIOS (NK) — films et séries en VF/VOSTFR, liens MP4 directs. Domaine configurable, recherche accélérée (cache, bascule parallèle, prefetch).",
       "version": "1.1.0",
       "author": "Community",
-      "supportedTypes": ["movie", "tv"],
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
       "filename": "providers/nakios.js",
       "enabled": true,
       "hasSettings": true,
-      "formats": ["mp4"],
+      "formats": [
+        "mp4"
+      ],
       "logo": "https://www.google.com/s2/favicons?domain=nakios.rent&sz=128",
-      "contentLanguage": ["fr"]
+      "contentLanguage": [
+        "fr"
+      ]
+    },
+    {
+      "id": "purstream",
+      "name": "PURSTREAM",
+      "description": "PURSTREAM — films et séries en MULTI/VOSTFR, playlists HLS. Fiche unique par série (épisodes instantanés), domaine configurable.",
+      "version": "1.0.0",
+      "author": "Community",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/purstream.js",
+      "enabled": true,
+      "hasSettings": true,
+      "formats": [
+        "m3u8"
+      ],
+      "logo": "https://www.google.com/s2/favicons?domain=purstream.tech&sz=128",
+      "contentLanguage": [
+        "fr"
+      ]
     }
   ]
 }

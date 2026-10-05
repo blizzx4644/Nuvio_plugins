@@ -1,10 +1,10 @@
 {
-  "name": "nuvio-nakios-provider",
+  "name": "nuvio-nakios-purstream-providers",
   "version": "1.0.0",
   "private": true,
-  "description": "Plugin Nuvio (local scraper) pour NAKIOS (NK) — films et séries",
+  "description": "Plugins Nuvio (local scrapers) : NAKIOS et PURSTREAM",
   "scripts": {
-    "test": "node test/test-nakios.js",
-    "bench": "node test/bench-nakios.js"
+    "test": "node test/test-nakios.js && node test/test-purstream.js",
+    "bench": "node test/bench.js"
   }
 }
