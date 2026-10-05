@@ -4,6 +4,7 @@
   "private": true,
   "description": "Plugin Nuvio (local scraper) pour NAKIOS (NK) — films et séries",
   "scripts": {
-    "test": "node test/test-nakios.js"
+    "test": "node test/test-nakios.js",
+    "bench": "node test/bench-nakios.js"
   }
 }

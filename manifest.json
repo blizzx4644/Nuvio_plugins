@@ -1,12 +1,12 @@
 {
   "name": "Nakios Repo",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "scrapers": [
     {
       "id": "nakios",
       "name": "NAKIOS",
-      "description": "NAKIOS (NK) — films et séries en VF/VOSTFR, liens MP4 directs. Domaine configurable (il change souvent).",
-      "version": "1.0.0",
+      "description": "NAKIOS (NK) — films et séries en VF/VOSTFR, liens MP4 directs. Domaine configurable, recherche accélérée (cache, bascule parallèle, prefetch).",
+      "version": "1.1.0",
       "author": "Community",
       "supportedTypes": ["movie", "tv"],
       "filename": "providers/nakios.js",
