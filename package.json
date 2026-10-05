@@ -1,0 +1,9 @@
+{
+  "name": "nuvio-nakios-provider",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Plugin Nuvio (local scraper) pour NAKIOS (NK) — films et séries",
+  "scripts": {
+    "test": "node test/test-nakios.js"
+  }
+}

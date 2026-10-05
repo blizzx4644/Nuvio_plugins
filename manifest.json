@@ -1,0 +1,20 @@
+{
+  "name": "Nakios Repo",
+  "version": "1.0.0",
+  "scrapers": [
+    {
+      "id": "nakios",
+      "name": "NAKIOS",
+      "description": "NAKIOS (NK) — films et séries en VF/VOSTFR, liens MP4 directs. Domaine configurable (il change souvent).",
+      "version": "1.0.0",
+      "author": "Community",
+      "supportedTypes": ["movie", "tv"],
+      "filename": "providers/nakios.js",
+      "enabled": true,
+      "hasSettings": true,
+      "formats": ["mp4"],
+      "logo": "https://www.google.com/s2/favicons?domain=nakios.rent&sz=128",
+      "contentLanguage": ["fr"]
+    }
+  ]
+}
